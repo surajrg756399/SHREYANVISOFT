@@ -27,7 +27,7 @@ export async function onRequestPost(context) {
       let admins = await env.KV.get("admin_users", "json");
       if (!admins) {
         // Bootstrap the default admin if none exist
-        admins = [{ email: "sales@shreyanvisoft.com", role: "superadmin", password: "" }];
+        admins = [{ email: "shreyanvi@shreyanvisoft.com", role: "superadmin", password: "" }];
         await env.KV.put("admin_users", JSON.stringify(admins));
       }
 
