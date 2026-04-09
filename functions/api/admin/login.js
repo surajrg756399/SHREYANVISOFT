@@ -13,34 +13,43 @@ export async function onRequestPost(context) {
       return new Response(JSON.stringify({ error: "KV storage not configured" }), { status: 500 });
     }
 
-    // 1. Get or Bootstrap Admins
-    let admins = await env.KV.get("admin_users", "json");
-    if (!admins) {
-      // Bootstrap the master admin if none exist
-      admins = [{ email: "sales@shreyanvisoft.com", role: "superadmin", password: "" }];
-      await env.KV.put("admin_users", JSON.stringify(admins));
-    }
-
-    const adminUser = admins.find(a => a.email === email);
-    if (!adminUser) {
-      return new Response(JSON.stringify({ success: false, error: "Unauthorized Access" }), { status: 401 });
-    }
-
+    // 1. Check Master Admin from Environment Variables
     let isValid = false;
+    let adminUser = null;
 
-    // 2. Verify Password OR OTP
-    if (password && adminUser.password && adminUser.password === password) {
+    if (env.ADMIN_EMAIL && env.ADMIN_PASSWORD && email === env.ADMIN_EMAIL && password === env.ADMIN_PASSWORD) {
       isValid = true;
-    } else if (otp) {
-      const storedOtp = await env.KV.get(`otp:${email}`);
-      if (storedOtp && storedOtp === otp) {
+      adminUser = { email: env.ADMIN_EMAIL, role: "superadmin" };
+    }
+
+    // 2. If not master admin, check KV storage for other admins
+    if (!isValid) {
+      let admins = await env.KV.get("admin_users", "json");
+      if (!admins) {
+        // Bootstrap the default admin if none exist
+        admins = [{ email: "sales@shreyanvisoft.com", role: "superadmin", password: "" }];
+        await env.KV.put("admin_users", JSON.stringify(admins));
+      }
+
+      adminUser = admins.find(a => a.email === email);
+      if (!adminUser) {
+        return new Response(JSON.stringify({ success: false, error: "Unauthorized Access" }), { status: 401 });
+      }
+
+      // Verify Password OR OTP for KV admins
+      if (password && adminUser.password && adminUser.password === password) {
         isValid = true;
-        await env.KV.delete(`otp:${email}`); // Burn OTP after use
+      } else if (otp) {
+        const storedOtp = await env.KV.get(`otp:${email}`);
+        if (storedOtp && storedOtp === otp) {
+          isValid = true;
+          await env.KV.delete(`otp:${email}`); // Burn OTP after use
+        }
       }
     }
 
     // 3. Issue Session Token
-    if (isValid) {
+    if (isValid && adminUser) {
       // Generate a simple random token
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
       await env.KV.put(`session:${token}`, email, { expirationTtl: 86400 }); // 24 hours
