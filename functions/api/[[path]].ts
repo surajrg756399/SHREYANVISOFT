@@ -110,6 +110,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // Admin Login
     if (path === '/api/admin/login' && method === 'POST') {
+      if (!env.KV) {
+        return new Response(JSON.stringify({ error: 'KV STORAGE NOT CONFIGURED' }), { status: 500, headers: corsHeaders });
+      }
+
       const { email, password } = await request.json() as any;
       
       // Check Master Admin from Env
@@ -131,7 +135,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     // Admin Auth Check
-    const adminSession = token ? await env.KV.get(`admin_session_${token}`) : null;
+    let adminSession = null;
+    if (token && env.KV) {
+      adminSession = await env.KV.get(`admin_session_${token}`);
+    }
     if (path.startsWith('/api/admin/') && path !== '/api/admin/login') {
       if (!adminSession) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
@@ -198,6 +205,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     
     // POST /api/client/login
     if (path === '/api/client/login' && method === 'POST') {
+      if (!env.KV) {
+        return new Response(JSON.stringify({ error: 'KV NAMESPACE NOT BOUND' }), { status: 500, headers: corsHeaders });
+      }
+
       const { email, password } = await request.json() as any;
       const clients = await env.DB.prepare('SELECT * FROM clients').all();
       const client = clients.results.find((c: any) => {
@@ -213,7 +224,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401, headers: corsHeaders });
     }
 
-    const clientSessionId = token ? await env.KV.get(`client_session_${token}`) : null;
+    let clientSessionId = null;
+    if (token && env.KV) {
+      clientSessionId = await env.KV.get(`client_session_${token}`);
+    }
     if (path.startsWith('/api/client/') && path !== '/api/client/login') {
       if (!clientSessionId) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
